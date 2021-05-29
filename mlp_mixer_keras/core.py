@@ -52,10 +52,10 @@ class MixerBlock(Layer):
         return input_shape
 
 
-def mlp_mixer(
+def _mlp_mixer(
     input_shape=(224, 224, 3),
-    num_classes=10,
-    num_blocks=8,
+    n_classes=10,
+    n_blocks=8,
     patch_size=16,
     hidden_dim=512,
     tokens_mlp_dim=256,
@@ -73,7 +73,7 @@ def mlp_mixer(
 
     x = Rearrange('n h w c -> n (h w) c')(x)
 
-    for _ in range(num_blocks):
+    for _ in range(n_blocks):
         x = MixerBlock(
             num_patches=num_patches,
             channel_dim=hidden_dim,
@@ -83,21 +83,42 @@ def mlp_mixer(
 
     x = LayerNormalization(name='pre_head_layer_norm')(x)
     x = Reduce('b n c -> b c', 'mean')(x)
-    out = Dense(num_classes, name='head')(x)
+    out = Dense(n_classes, name='head')(x)
 
     return Model(inputs, out)
 
 
-if __name__ == "__main__":
-    import numpy as np
+def mlp_mixer(spec_code, input_shape=(224, 224, 3), n_classes=10):
+    """Create an MLP Mixer model.
 
-    with tf.device('cpu'):
-        np.random.seed = 1
-        img = np.random.random((2, 256, 256, 3))
-        print(img.shape)
-        model = mlp_mixer(
-            input_shape=(256, 256, 3)
-        )
-        print(model.summary())
-        pred = model.predict(img)
-        print(pred, pred.shape)
+    Parameters
+    ----------
+    spec_code: str
+        Specification code according to the parameters presented in
+        table 1 of the paper. It must assume one of theses values:
+        `[ 'S32', 'S16', 'B32', 'B16', 'L32', 'L16', 'H14' ]`
+    input_shape: tuple
+        Input image shape.
+    n_classes: int
+        Maximum number of classes that exists in the dataset.
+
+    Return
+    ------
+        Returns the selected MLP Mixer model.
+
+    Reference
+    ---------
+    MLP-Mixer: An all-MLP Architecture for Vision
+    https://arxiv.org/pdf/2105.01601.pdf
+    """
+    PARAMETERS = {
+        "S32": [8, 32, 512, 256, 2048],
+        "S16": [8, 16, 512, 256, 2048],
+        "B32": [12, 32, 768, 384, 3072],
+        "B16": [12, 16, 768, 384, 3072],
+        "L32": [24, 32, 1024, 512, 4096],
+        "L16": [24, 16, 1024, 512, 4096],
+        "H14": [32, 14, 1280, 640, 5120]
+    }
+
+    return _mlp_mixer(input_shape, n_classes, *PARAMETERS[spec_code])
